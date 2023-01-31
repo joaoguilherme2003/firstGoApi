@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -15,68 +16,104 @@ func RedisConnect() redis.Conn {
 	return c
 }
 
-func postRedis(funcionario Funcionario) {
+func postRedis(ctx context.Context, funcionario Funcionario) {
 
-	c := RedisConnect()
-	defer c.Close()
-	object, err := json.Marshal(funcionario)
-	if err != nil {
-		panic(err)
-	}
-	reply, err := c.Do("SET", "post:"+funcionario.Id, object)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(reply)
-}
-
-func getAllRedis() []Funcionario {
-
-	var funcionarios []Funcionario
-	c := RedisConnect()
-	defer c.Close()
-	keys, err := c.Do("KEYS", "post:*")
-	if err != nil {
-		panic(err)
-	}
-	for _, i := range keys.([]interface{}) {
-
-		var funcionario Funcionario
-		reply, err := c.Do("GET", i.([]byte))
+	select {
+	case <-ctx.Done():
+		fmt.Println("Sinal cancelamento")
+		return
+	default:
+		c := RedisConnect()
+		defer c.Close()
+		object, err := json.Marshal(funcionario)
 		if err != nil {
 			panic(err)
 		}
-		if err := json.Unmarshal(reply.([]byte), &funcionario); err != nil {
+		reply, err := c.Do("SET", "post:"+funcionario.Id, object)
+		if err != nil {
 			panic(err)
 		}
-		funcionarios = append(funcionarios, funcionario)
+		fmt.Println(reply)
 	}
-	return funcionarios
+
 }
 
-func findRedis(id string) Funcionario {
+func getAllRedis(ctx context.Context) []Funcionario {
 
-	var funcionario Funcionario
-	c := RedisConnect()
-	defer c.Close()
-	reply, err := c.Do("GET", "post:"+id)
-	if err != nil {
-		panic(err)
+	select {
+	case <-ctx.Done():
+		fmt.Println("Sinal cancelamento")
+		return nil
+	default:
+		var funcionarios []Funcionario
+		c := RedisConnect()
+		defer c.Close()
+		keys, err := c.Do("KEYS", "post:*")
+		if err != nil {
+			panic(err)
+		}
+		for _, i := range keys.([]interface{}) {
+
+			var funcionario Funcionario
+			reply, err := c.Do("GET", i.([]byte))
+			if err != nil {
+				panic(err)
+			}
+			if err := json.Unmarshal(reply.([]byte), &funcionario); err != nil {
+				panic(err)
+			}
+			funcionarios = append(funcionarios, funcionario)
+		}
+		return funcionarios
 	}
-	if err = json.Unmarshal(reply.([]byte), &funcionario); err != nil {
-		panic(err)
-	}
-	return funcionario
 }
 
-func deleteRedis(id string) Funcionario {
+func findRedis(ctx context.Context, id string) Funcionario {
 
-	funcionario := findRedis(id)
-	c := RedisConnect()
-	defer c.Close()
-	_, err := c.Do("DEL", "post:"+id)
-	if err != nil {
-		panic(err)
+	select {
+	case <-ctx.Done():
+		var funcionario Funcionario
+		fmt.Println("Sinal cancelamento")
+		return funcionario
+	default:
+		var funcionario Funcionario
+		c := RedisConnect()
+		defer c.Close()
+		reply, err := c.Do("GET", "post:"+id)
+		if err != nil {
+			panic(err)
+		}
+		if err = json.Unmarshal(reply.([]byte), &funcionario); err != nil {
+			panic(err)
+		}
+		return funcionario
 	}
-	return funcionario
+
+}
+
+func deleteRedis(ctx context.Context, id string) Funcionario {
+
+	select {
+	case <-ctx.Done():
+		var funcionario Funcionario
+		fmt.Println("Sinal cancelamento")
+		return funcionario
+	default:
+		var funcionario Funcionario
+		c := RedisConnect()
+		defer c.Close()
+		reply, err := c.Do("GET", "post:"+id)
+		if err != nil {
+			panic(err)
+		}
+		if err = json.Unmarshal(reply.([]byte), &funcionario); err != nil {
+			panic(err)
+		}
+		replyDel, err := c.Do("DEL", "post:"+id)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(replyDel)
+		return funcionario
+	}
 }
