@@ -5,5 +5,3 @@ type Funcionario struct {
 	Nome string `json:"nome"`
 	Cpf  string `json:"cpf"`
 }
-
-var funcionarios []Funcionario
